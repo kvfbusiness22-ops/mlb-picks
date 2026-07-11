@@ -23,16 +23,23 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Run today's pipeline (auto mode -- may no-op if it's not time yet)
+      - name: Run today's pipeline (auto-gated on schedule; always forced on manual "Run workflow")
         env:
           STATS_MODE: api
           ODDS_MODE: mock
           PUBLIC_BETTING_MODE: manual
+          PUBLIC_BETTING_URL: ""
           TIMEZONE: America/New_York
           DAILY_RUN_HOUR: "10"
           DAILY_RUN_MINUTE: "0"
           AUTO_RUN_LEAD_MINUTES: "60"
-        run: python run_daily.py --auto
+        run: |
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            python run_daily.py --auto
+          else
+            echo "Manually triggered -- forcing a fresh run + publish regardless of timing/once-a-day gate."
+            python run_daily.py
+          fi
 
       - name: Publish report + save history back to the repo
         run: |
