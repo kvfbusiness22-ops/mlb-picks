@@ -26,6 +26,7 @@ class Game:
     game_time_utc: Optional[str]
     home_pitcher: Optional[ProbablePitcher] = None
     away_pitcher: Optional[ProbablePitcher] = None
+    sport: str = "MLB"          # "MLB" | "WNBA" | ... -- drives which grading inputs apply
 
 
 @dataclass
@@ -68,6 +69,7 @@ class Recommendation:
     game: Game
     side: str             # "home" | "away"
     team: str
+    sport: str
     odds_american: int
     edge_pct: float
     model_prob: float

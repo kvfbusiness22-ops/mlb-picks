@@ -22,8 +22,8 @@ def print_daily_report(report):
         console.print(Panel("\n".join(report.data_warnings), title="Data quality warnings", border_style="yellow"))
 
     if not report.plays:
-        console.print(Panel("NO BET today -- nothing cleared the 5% edge bar. That's the system "
-                             "working as designed.", title="Recommendation", border_style="red"))
+        console.print(Panel("NO BET today -- nothing across enabled sports cleared a real edge. That's the "
+                             "system working as designed.", title="Recommendation", border_style="red"))
     else:
         for i, play in enumerate(report.plays, start=1):
             _print_play(play, i)
@@ -43,7 +43,7 @@ def print_daily_report(report):
 
 
 def _print_play(play, index):
-    title = f"PLAY #{index}: {play.team} ML ({play.odds_american:+d})"
+    title = f"PLAY #{index}: {play.team} ({play.sport}) ML ({play.odds_american:+d})"
     body = Table.grid(padding=(0, 1))
     body.add_column(justify="left")
     body.add_row(f"[bold]Edge:[/bold] {play.edge_pct:.1%}   "

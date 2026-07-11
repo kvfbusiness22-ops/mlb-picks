@@ -38,6 +38,7 @@ import auto_gate
 import config
 from data.db import Database
 from data.schedule_provider import get_todays_games
+from data.schedule_provider_wnba import get_todays_wnba_games
 from data.odds_providers import get_odds_provider
 from data.public_betting_provider import get_public_betting_provider
 from data.stats_provider import get_stats_provider
@@ -66,7 +67,7 @@ logger = logging.getLogger("run_daily")
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description="Run today's MLB betting recommendation pipeline.")
+    parser = argparse.ArgumentParser(description="Run today's betting recommendation pipeline.")
     parser.add_argument("--date", default=None, help="Run as if it were this date (YYYY-MM-DD).")
     parser.add_argument("--skip-grading", action="store_true", help="Skip grading yesterday's picks first.")
     parser.add_argument("--auto", action="store_true",
@@ -78,7 +79,12 @@ def main(argv=None):
                 # not the machine's local date -- matters on a UTC cloud runner (see auto_gate.py)
     date_str = run_date.strftime("%Y-%m-%d")
 
-    games = get_todays_games(date_str)
+    games = []
+    for sport in config.ENABLED_SPORTS:
+        if sport == "MLB":
+            games.extend(get_todays_games(date_str))
+        elif sport == "WNBA":
+            games.extend(get_todays_wnba_games(date_str))
 
     if args.auto:
         should_run, reason = auto_gate.should_run_now(run_date, date_str, games)
@@ -96,12 +102,12 @@ def main(argv=None):
     data_warnings = []
 
     if not games:
-        logger.info("No MLB games found for %s.", date_str)
+        logger.info("No games found across enabled sports (%s) for %s.", ", ".join(config.ENABLED_SPORTS), date_str)
         report = DailyReport(date=date_str, slate_size=0, plays=[], hr_props=[], parlay=None,
                               dropped_notes=[], celestial=_celestial_dict(run_date),
                               numerology=_numerology_dict(run_date),
                               bankroll_summary=bankroll_summary(db),
-                              data_warnings=["No games on today's MLB schedule."])
+                              data_warnings=["No games on today's schedule across enabled sports."])
         _emit(report)
         if args.auto:
             auto_gate.mark_published(date_str)
@@ -113,8 +119,12 @@ def main(argv=None):
     for game in games:
         db.upsert_game(game)
 
-    odds_provider = get_odds_provider()
-    odds_by_game = odds_provider.get_odds(games)
+    odds_by_game = {}
+    for sport in config.ENABLED_SPORTS:
+        sport_games = [g for g in games if g.sport == sport]
+        if not sport_games:
+            continue
+        odds_by_game.update(get_odds_provider(sport).get_odds(sport_games))
     now_iso = datetime.now(timezone.utc).isoformat()
     for game in games:
         odds = odds_by_game.get(game.game_id)
@@ -147,14 +157,19 @@ def main(argv=None):
         odds = odds_by_game.get(game.game_id)
         if not odds:
             continue
-        home_pitcher_profile = stats_provider.get_pitcher_profile(game.home_pitcher.name if game.home_pitcher else None)
-        away_pitcher_profile = stats_provider.get_pitcher_profile(game.away_pitcher.name if game.away_pitcher else None)
-        home_offense = stats_provider.get_team_offense_profile(game.home_team)
-        away_offense = stats_provider.get_team_offense_profile(game.away_team)
-        situational = park_and_situational_summary(game.home_team, game.away_team, date_str)
+        is_mlb = game.sport == "MLB"
+        home_pitcher_profile = (stats_provider.get_pitcher_profile(game.home_pitcher.name)
+                                 if is_mlb and game.home_pitcher else None)
+        away_pitcher_profile = (stats_provider.get_pitcher_profile(game.away_pitcher.name)
+                                 if is_mlb and game.away_pitcher else None)
+        home_offense = stats_provider.get_team_offense_profile(game.home_team) if is_mlb else None
+        away_offense = stats_provider.get_team_offense_profile(game.away_team) if is_mlb else None
+        situational = (park_and_situational_summary(game.home_team, game.away_team, date_str)
+                       if is_mlb else {})
         ev = evaluate_game(
             game, odds, home_pitcher_profile, away_pitcher_profile, home_offense, away_offense,
-            team_records.get(game.home_team, {}), team_records.get(game.away_team, {}),
+            team_records.get(game.home_team, {}) if is_mlb else {},
+            team_records.get(game.away_team, {}) if is_mlb else {},
             public_splits.get(game.game_id), situational, run_date=run_date,
         )
         evaluations.append(ev)

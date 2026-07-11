@@ -32,6 +32,14 @@ class OddsProvider:
         raise NotImplementedError
 
 
+# The Odds API's sport key per sport we support -- see
+# https://the-odds-api.com/sports-odds-data/sports-apis.html
+ODDS_API_SPORT_KEYS = {
+    "MLB": "baseball_mlb",
+    "WNBA": "basketball_wnba",
+}
+
+
 class MockOddsProvider(OddsProvider):
     """Deterministic-per-game-per-day synthetic odds so the whole pipeline is
     runnable with zero setup. Odds drift slightly within the same day (seeded
@@ -68,16 +76,22 @@ class MockOddsProvider(OddsProvider):
 class TheOddsApiProvider(OddsProvider):
     """Real odds via The Odds API, FanDuel bookmaker, moneyline+spread+total."""
 
-    def __init__(self, api_key=None, bookmaker=None):
+    def __init__(self, api_key=None, bookmaker=None, sport="MLB"):
         self.api_key = api_key or config.ODDS_API_KEY
         self.bookmaker = bookmaker or config.ODDS_API_BOOKMAKER
+        self.sport = sport
 
     def get_odds(self, games):
         if not self.api_key:
             logger.warning("ODDS_API_KEY missing -- falling back to mock odds for this run.")
             return MockOddsProvider().get_odds(games)
 
-        url = f"{config.ODDS_API_BASE_URL}/sports/baseball_mlb/odds"
+        sport_key = ODDS_API_SPORT_KEYS.get(self.sport)
+        if not sport_key:
+            logger.warning("No Odds API sport key mapped for %s -- falling back to mock odds.", self.sport)
+            return MockOddsProvider().get_odds(games)
+
+        url = f"{config.ODDS_API_BASE_URL}/sports/{sport_key}/odds"
         params = {
             "apiKey": self.api_key,
             "regions": "us",
@@ -148,7 +162,7 @@ def _prob_to_american(p):
     return round(100 * (1 - p) / p)
 
 
-def get_odds_provider():
+def get_odds_provider(sport="MLB"):
     if config.ODDS_MODE == "api":
-        return TheOddsApiProvider()
+        return TheOddsApiProvider(sport=sport)
     return MockOddsProvider()

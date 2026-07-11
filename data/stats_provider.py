@@ -20,45 +20,15 @@ import time
 from dataclasses import dataclass, asdict
 
 import pandas as pd
-import requests
 
 import config
+from data.http_utils import patch_requests_for_scraping
 
 logger = logging.getLogger(__name__)
 
 CACHE_TTL_HOURS = 12
 
-# FanGraphs (which pybaseball scrapes for FIP + team offense leaderboards)
-# blocks the default "python-requests/X.X" user agent with a 403 -- it's
-# bot-detection on the request headers, not a real outage. This makes every
-# outgoing request in the process look like a normal desktop browser
-# instead, which is the standard fix. Applied once, at import time, before
-# any pybaseball call can happen.
-_BROWSER_HEADERS = {
-    "User-Agent": ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
-                   "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"),
-    "Accept-Language": "en-US,en;q=0.9",
-}
-
-
-def _patch_requests_for_scraping():
-    if getattr(requests.Session.request, "_patched_for_scraping", False):
-        return  # idempotent -- safe if this module is reloaded/imported twice
-
-    _original_request = requests.Session.request
-
-    def _patched_request(self, method, url, **kwargs):
-        headers = kwargs.get("headers") or {}
-        for k, v in _BROWSER_HEADERS.items():
-            headers.setdefault(k, v)
-        kwargs["headers"] = headers
-        return _original_request(self, method, url, **kwargs)
-
-    _patched_request._patched_for_scraping = True
-    requests.Session.request = _patched_request
-
-
-_patch_requests_for_scraping()
+patch_requests_for_scraping()
 
 
 @dataclass

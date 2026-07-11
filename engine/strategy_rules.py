@@ -4,7 +4,11 @@ engine/strategy_rules.py
 Non-negotiable rules layered on top of raw edge numbers:
   - never below MIN_EDGE
   - flat 1-unit sizing
-  - at most MAX_PLAYS_PER_DAY, and a 2nd play only if it's as strong as the 1st
+  - up to MAX_PLAYS_PER_DAY plays PER DAY, picked across ALL enabled sports
+    combined (not per-sport) -- can be one MLB + one WNBA, two of the same
+    sport, or just one if only one game clears a real edge. Ranking prefers
+    edges inside config.TARGET_EDGE_MIN/MAX (the "close to 4.5-5%" sweet
+    spot) before falling back to raw-highest-edge for the rest.
   - team diversification: don't play the same team 3+ days running without
     stricter re-confirmation
   - line movement: only drop a play on significant adverse movement AND
@@ -18,8 +22,13 @@ from engine.models import Recommendation
 
 
 def select_daily_plays(evaluations, db, public_splits, run_date_str):
+    """evaluations may span multiple sports (each SideEvaluation carries its
+    own ev.game.sport) -- candidates are ranked together, not per-sport, so
+    the final top MAX_PLAYS_PER_DAY can mix e.g. one MLB + one WNBA play.
+    Ranking prefers edges inside config.TARGET_EDGE_MIN/MAX (your requested
+    "close to 4.5-5%" sweet spot) over a raw-higher edge outside that band."""
     candidates = [e for e in evaluations if e.recommended_side and e.edge_pct >= config.MIN_EDGE]
-    candidates.sort(key=lambda e: e.edge_pct, reverse=True)
+    candidates.sort(key=_edge_rank_key)
 
     recent_picks = {p["team"] for p in db.get_recent_team_picks(run_date_str, config.DIVERSIFICATION_LOOKBACK_DAYS)}
 
@@ -28,8 +37,6 @@ def select_daily_plays(evaluations, db, public_splits, run_date_str):
     for ev in candidates:
         if len(plays) >= config.MAX_PLAYS_PER_DAY:
             break
-        if plays and ev.edge_pct < plays[0].edge_pct - config.SECOND_PLAY_TOLERANCE:
-            break  # 2nd play must be at least as strong as the primary, or we stop here
 
         team = ev.game.home_team if ev.recommended_side == "home" else ev.game.away_team
 
@@ -52,7 +59,7 @@ def select_daily_plays(evaluations, db, public_splits, run_date_str):
 
         odds_american = ev.odds.home_ml if ev.recommended_side == "home" else ev.odds.away_ml
         plays.append(Recommendation(
-            game=ev.game, side=ev.recommended_side, team=team,
+            game=ev.game, side=ev.recommended_side, team=team, sport=ev.game.sport,
             odds_american=odds_american, edge_pct=ev.edge_pct,
             model_prob=ev.model_prob_home if ev.recommended_side == "home" else ev.model_prob_away,
             market_prob=ev.market_prob_home if ev.recommended_side == "home" else ev.market_prob_away,
@@ -66,6 +73,16 @@ def select_daily_plays(evaluations, db, public_splits, run_date_str):
         recent_picks.add(team)  # don't recommend the same team twice in one slate either
 
     return plays, dropped_notes
+
+
+def _edge_rank_key(ev):
+    """Sort key: candidates inside the TARGET_EDGE band rank first (best
+    band-fit first), then everyone else by raw edge descending."""
+    in_band = config.TARGET_EDGE_MIN <= ev.edge_pct <= config.TARGET_EDGE_MAX
+    if in_band:
+        band_center = (config.TARGET_EDGE_MIN + config.TARGET_EDGE_MAX) / 2
+        return (0, abs(ev.edge_pct - band_center))
+    return (1, -ev.edge_pct)
 
 
 def get_parlay_pool(evaluations):
@@ -84,7 +101,7 @@ def get_parlay_pool(evaluations):
         model_prob = ev.model_prob_home if ev.recommended_side == "home" else ev.model_prob_away
         market_prob = ev.market_prob_home if ev.recommended_side == "home" else ev.market_prob_away
         pool.append(Recommendation(
-            game=ev.game, side=ev.recommended_side, team=team, odds_american=odds_american,
+            game=ev.game, side=ev.recommended_side, team=team, sport=ev.game.sport, odds_american=odds_american,
             edge_pct=ev.edge_pct, model_prob=model_prob, market_prob=market_prob,
             stake_units=config.FLAT_STAKE_UNITS, stake_dollars=config.FLAT_STAKE_UNITS * config.UNIT_SIZE_DOLLARS,
             reasoning=[fs.reasoning for fs in ev.factor_scores], factor_scores=ev.factor_scores,

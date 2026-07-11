@@ -3,7 +3,7 @@ data/public_betting_provider.py
 ================================
 Ticket %/handle % splits. This is the one input in the whole system with NO
 free, legal, programmatic source -- sportsbettingdime.com, Action Network,
-etc. are websites for humans to read, not APIs. Three modes
+etc. are websites for humans to read, not APIs. Four modes
 (config.PUBLIC_BETTING_MODE):
 
 - "manual" (default): you read today's split off a site like
@@ -11,6 +11,10 @@ etc. are websites for humans to read, not APIs. Three modes
   manual_inputs/public_betting_<date>.json. run_daily.py auto-creates that
   file with neutral 50/50 placeholders + every game listed, so you're just
   editing numbers, not writing JSON from scratch.
+- "url": set config.PUBLIC_BETTING_URL once to a splits page (e.g.
+  sportsbettingdime's MLB odds/trends page) and every run fetches +
+  parses THAT page fresh -- see data/public_betting_scraper.py for exactly
+  how (and its honest limitations: paywalled handle%, layout assumptions).
 - "mock": synthetic split, for demoing the pipeline only.
 - "api": stub for you to wire up a paid data feed you have access to.
 """
@@ -30,7 +34,7 @@ class PublicSplit:
     tickets_pct_home: float   # 0..100, % of TICKETS (bet count) on the home team
     handle_pct_home: float    # 0..100, % of HANDLE ($) on the home team
     source: str
-    data_quality: str         # "manual" | "mock" | "api" | "missing"
+    data_quality: str         # "manual" | "mock" | "api" | "missing" | "url" | "partial"
 
 
 class PublicBettingProvider:
@@ -88,6 +92,30 @@ class ApiPublicBettingProvider(PublicBettingProvider):
         )
 
 
+class UrlPublicBettingProvider(PublicBettingProvider):
+    """Fetches + parses config.PUBLIC_BETTING_URL fresh every run instead of
+    reading manual_inputs/*.json -- see data/public_betting_scraper.py for
+    the actual fetch/parse logic and its known limitations. Any game the
+    page doesn't seem to mention (or PUBLIC_BETTING_URL left blank) falls
+    back to a neutral 50/50 "missing" split, same as the manual provider
+    does for an unfilled-in game."""
+
+    def get_splits(self, games, date_str):
+        from data.public_betting_scraper import fetch_and_parse_splits
+
+        if not config.PUBLIC_BETTING_URL:
+            logger.warning("PUBLIC_BETTING_MODE=url but PUBLIC_BETTING_URL isn't set -- treating all games as 50/50.")
+            return {g.game_id: PublicSplit(50.0, 50.0, "url", "missing") for g in games}
+
+        found = fetch_and_parse_splits(config.PUBLIC_BETTING_URL, games)
+        out = {}
+        for game in games:
+            out[game.game_id] = found.get(
+                game.game_id, PublicSplit(50.0, 50.0, config.PUBLIC_BETTING_URL, "missing")
+            )
+        return out
+
+
 def ensure_manual_template(games, date_str):
     """Writes manual_inputs/public_betting_<date>.json with every game listed
     at a neutral 50/50 split, IF that file doesn't already exist. Never
@@ -114,4 +142,6 @@ def get_public_betting_provider():
         return MockPublicBettingProvider()
     if config.PUBLIC_BETTING_MODE == "api":
         return ApiPublicBettingProvider()
+    if config.PUBLIC_BETTING_MODE == "url":
+        return UrlPublicBettingProvider()
     return ManualPublicBettingProvider()

@@ -55,6 +55,22 @@ Copy `.env.example` to `.env` and fill in:
   file and fill in the real tickets%/handle% you read off your usual site.
   Takes under a minute for a normal slate. (`PUBLIC_BETTING_MODE=mock` exists
   purely to demo the pipeline without doing this.)
+
+  **Or skip typing it in by hand:** set `PUBLIC_BETTING_MODE=url` and
+  `PUBLIC_BETTING_URL=<a splits page>` (e.g.
+  `https://www.sportsbettingdime.com/mlb/odds/`) ONCE, and every run fetches
+  + parses that page fresh instead -- `data/public_betting_scraper.py` reads
+  each team's name off the page and grabs the percentages next to it. Two
+  honest caveats: (1) it's text-pattern matching, not a wired-up API, so it's
+  reading the page the same fragile way `pybaseball` reads FanGraphs -- if a
+  game shows up "missing" in that day's warnings, the page's real layout
+  didn't match what the parser expected, and it may need a tweak; (2) sites
+  commonly paywall the money%/handle% number specifically (sportsbettingdime
+  gates it behind "SBD Plus") while tickets% stays free -- when only
+  tickets% is found, that game is flagged `[Bet% only]` in the report rather
+  than faking a handle% number. In the cloud scheduler, flip this in
+  `.github/workflows/daily.yml`'s env block instead of `.env` (see the
+  comment there).
 - **Injuries** -- same idea: `manual_inputs/injuries_<date>.json` is
   auto-created empty each day. Add `{player, status, impact}` entries for
   anything that should weigh on the situational factor.

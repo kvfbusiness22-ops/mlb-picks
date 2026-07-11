@@ -41,9 +41,12 @@ STATS_MODE = os.getenv("STATS_MODE", "api")           # pybaseball is free & pub
 # .com and Action Network are websites for humans, not APIs. Pick how you want
 # to supply it:
 #   "manual" -> you fill in manual_inputs/public_betting_<date>.json each day (default)
+#   "url"    -> set PUBLIC_BETTING_URL below ONCE; every run fetches + parses
+#               that page fresh (see data/public_betting_scraper.py)
 #   "mock"   -> synthetic split, for demoing the pipeline only
 #   "api"    -> you've wired in a paid feed yourself in data/public_betting_provider.py
-PUBLIC_BETTING_MODE = os.getenv("PUBLIC_BETTING_MODE", "manual")  # manual | mock | api
+PUBLIC_BETTING_MODE = os.getenv("PUBLIC_BETTING_MODE", "manual")  # manual | url | mock | api
+PUBLIC_BETTING_URL = os.getenv("PUBLIC_BETTING_URL", "")  # e.g. an sportsbettingdime.com MLB odds/trends page
 
 ODDS_API_KEY = os.getenv("ODDS_API_KEY", "")
 ODDS_API_BOOKMAKER = "fanduel"          # primary book chosen for this build
@@ -59,9 +62,30 @@ FLAT_STAKE_UNITS = 1.0             # non-negotiable: every play is exactly 1 uni
 # ---------------------------------------------------------------------------
 # Strategy engine thresholds (Section: Core Rules)
 # ---------------------------------------------------------------------------
-MIN_EDGE = 0.05                     # never recommend below a 5% model-vs-market edge
-MAX_PLAYS_PER_DAY = 2               # primary + (optional) second play of equal strength
-SECOND_PLAY_TOLERANCE = 0.0         # 2nd play must have edge >= primary edge - tolerance
+MIN_EDGE = 0.0001                   # any positive model-vs-market edge qualifies (was 0.05)
+MAX_PLAYS_PER_DAY = 3                # top 2-3 across ALL enabled sports combined, not per-sport
+SECOND_PLAY_TOLERANCE = 0.0         # unused now that plays are picked cross-sport by target-edge closeness -- kept for reference
+
+# Preferred edge "sweet spot" -- when ranking today's qualifying plays across
+# every enabled sport, candidates INSIDE this band are preferred over a
+# higher raw edge outside it (per your ask: "close to 4.5-5%, not just the
+# single highest number"). Anything below MIN_EDGE never qualifies at all.
+TARGET_EDGE_MIN = 0.045
+TARGET_EDGE_MAX = 0.05
+
+# ---------------------------------------------------------------------------
+# Sports covered (Section: Data Layer)
+# ---------------------------------------------------------------------------
+# Every sport listed here gets its own schedule/odds pull and contributes to
+# the single cross-sport top-N selection in engine/strategy_rules.py. Only
+# list a sport once its data providers actually exist -- MLB and WNBA are
+# wired up; NFL/NBA/NHL are NOT yet (no schedule/odds provider written for
+# them), so listing them here would just silently contribute nothing.
+# WNBA is in season roughly May-Oct; NFL Sept-Jan; NBA/NHL Oct-June --
+# there's no free "is this sport in season today" API, so this list is a
+# manual on/off switch you flip as seasons change (or ask to have a new
+# sport wired up when its season starts).
+ENABLED_SPORTS = ["MLB", "WNBA"]
 
 # Team diversification (Section: Grading Factors -> team diversification)
 DIVERSIFICATION_LOOKBACK_DAYS = 3   # don't play the same team 3x running without extra confirmation

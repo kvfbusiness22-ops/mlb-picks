@@ -109,6 +109,10 @@
     .bankroll .num { font-size: 17px; }
   }
 </style>
+<style id="__sport_tag_style">
+  .sport-tag { font-size: 12px; font-weight: 700; color: var(--accent); background: var(--accent-dim);
+               padding: 2px 8px; border-radius: 6px; vertical-align: middle; margin-left: 4px; }
+</style>
 </head>
 <body>
 <div class="wrap">
@@ -136,13 +140,13 @@
   {% if not plays %}
   <div class="nobet">
     <div class="big">NO BET TODAY</div>
-    <div class="sub">Nothing on this slate cleared the 5% edge threshold. Standing down is the system working as designed.</div>
+    <div class="sub">Nothing across today's enabled sports cleared a real edge. Standing down is the system working as designed.</div>
   </div>
   {% else %}
     {% for play in plays %}
     <div class="play">
       <div class="label">Play #{{ loop.index }}</div>
-      <div class="team">{{ play.team }} ML <span class="odds">({{ '%+d' | format(play.odds_american) }})</span></div>
+      <div class="team">{{ play.team }} <span class="sport-tag">{{ play.sport }}</span> ML <span class="odds">({{ '%+d' | format(play.odds_american) }})</span></div>
       <div class="metrics">
         <div class="metric"><div class="num">{{ '%.1f' | format(play.edge_pct * 100) }}%</div><div class="lbl">Edge</div></div>
         <div class="metric"><div class="num">{{ '%.1f' | format(play.model_prob * 100) }}%</div><div class="lbl">Model win%</div></div>

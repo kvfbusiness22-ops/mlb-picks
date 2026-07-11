@@ -139,6 +139,8 @@ def score_public_sharp_split(ctx):
     reasoning = f"Tickets {tickets_home:.0f}% home / Handle {handle_home:.0f}% home -> {lean}"
     if split.data_quality in ("mock", "missing"):
         reasoning += "  [SIMULATED/PLACEHOLDER DATA -- fill in manual_inputs/public_betting_*.json]"
+    elif split.data_quality == "partial":
+        reasoning += "  [Bet% only -- Handle% wasn't found/is paywalled on the source page, so no real sharp-money divergence read today]"
     return FactorScore("public_sharp_split", "Public vs. sharp money", signal,
                         config.FACTOR_WEIGHTS["public_sharp_split"], reasoning, split.data_quality)
 
