@@ -28,6 +28,9 @@ def print_daily_report(report):
         for i, play in enumerate(report.plays, start=1):
             _print_play(play, i)
 
+    if report.fade_teams:
+        _print_fade_teams(report.fade_teams)
+
     if report.parlay:
         _print_parlay(report.parlay)
 
@@ -59,6 +62,20 @@ def _print_play(play, index):
     for r in play.reasoning:
         body.add_row(f"  - {r}")
     console.print(Panel(body, title=title, border_style="green"))
+
+
+def _print_fade_teams(fade_teams):
+    table = Table(title="Avoid Today (do NOT bet these teams' ML)")
+    table.add_column("Team")
+    table.add_column("Sport")
+    table.add_column("Opp.")
+    table.add_column("Odds")
+    table.add_column("Why")
+    for f in fade_teams:
+        table.add_row(f.team, f.sport, f.opponent,
+                      f"{f.odds_american:+d}" if f.odds_american is not None else "--",
+                      f.reasoning[0])
+    console.print(table)
 
 
 def _print_parlay(parlay):

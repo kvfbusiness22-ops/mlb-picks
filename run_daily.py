@@ -49,7 +49,7 @@ from data.celestial import celestial_signal_for, moon_phase_for, moon_sign_for
 from data.numerology import numerology_signal_for, reduce_date
 
 from engine.scoring import evaluate_game
-from engine.strategy_rules import select_daily_plays, get_parlay_pool
+from engine.strategy_rules import select_daily_plays, select_fade_teams, get_parlay_pool
 from engine.hr_props import evaluate_hr_prop_candidates
 from engine.parlay import maybe_build_parlay
 from engine.models import DailyReport
@@ -103,7 +103,7 @@ def main(argv=None):
 
     if not games:
         logger.info("No games found across enabled sports (%s) for %s.", ", ".join(config.ENABLED_SPORTS), date_str)
-        report = DailyReport(date=date_str, slate_size=0, plays=[], hr_props=[], parlay=None,
+        report = DailyReport(date=date_str, slate_size=0, plays=[], fade_teams=[], hr_props=[], parlay=None,
                               dropped_notes=[], celestial=_celestial_dict(run_date),
                               numerology=_numerology_dict(run_date),
                               bankroll_summary=bankroll_summary(db),
@@ -175,6 +175,7 @@ def main(argv=None):
         evaluations.append(ev)
 
     plays, dropped_notes = select_daily_plays(evaluations, db, public_splits, date_str)
+    fade_teams = select_fade_teams(evaluations)
 
     rosters = {}
     situational_by_team = {}
@@ -196,7 +197,7 @@ def main(argv=None):
     log_recommendations(db, date_str, plays, hr_props)
 
     report = DailyReport(
-        date=date_str, slate_size=len(games), plays=plays, hr_props=hr_props, parlay=parlay,
+        date=date_str, slate_size=len(games), plays=plays, fade_teams=fade_teams, hr_props=hr_props, parlay=parlay,
         dropped_notes=dropped_notes, celestial=_celestial_dict(run_date),
         numerology=_numerology_dict(run_date), bankroll_summary=bankroll_summary(db),
         data_warnings=data_warnings,

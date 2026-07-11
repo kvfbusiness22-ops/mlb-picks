@@ -42,6 +42,7 @@ def render_daily_report(report):
         numerology=report.numerology,
         data_warnings=report.data_warnings,
         plays=report.plays,
+        fade_teams=report.fade_teams,
         parlay=report.parlay,
         hr_props=report.hr_props,
         dropped_notes=report.dropped_notes,

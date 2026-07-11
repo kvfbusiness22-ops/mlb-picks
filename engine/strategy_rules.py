@@ -18,7 +18,7 @@ select_daily_plays() is the single entry point run_daily.py calls.
 """
 
 import config
-from engine.models import Recommendation
+from engine.models import Recommendation, FadeTeam
 
 
 def select_daily_plays(evaluations, db, public_splits, run_date_str):
@@ -83,6 +83,40 @@ def _edge_rank_key(ev):
         band_center = (config.TARGET_EDGE_MIN + config.TARGET_EDGE_MAX) / 2
         return (0, abs(ev.edge_pct - band_center))
     return (1, -ev.edge_pct)
+
+
+def select_fade_teams(evaluations):
+    """Teams to NOT bet on today (see config.FADE_MIN_EDGE docstring). Pulled
+    from the same evaluations as select_daily_plays(), independent of which
+    games actually became official plays -- so a team can show up here even
+    if its opponent didn't make the top MAX_PLAYS_PER_DAY cut, letting you
+    cross-check any team (e.g. one a friend or another source suggested)
+    against what this system's edge math actually thinks of it.
+    Sorted strongest-conviction first, capped at FADE_MAX_PER_DAY."""
+    if not config.FADE_ENABLED:
+        return []
+
+    candidates = [e for e in evaluations if e.recommended_side and e.edge_pct >= config.FADE_MIN_EDGE]
+    candidates.sort(key=lambda e: e.edge_pct, reverse=True)
+
+    fades = []
+    for ev in candidates[:config.FADE_MAX_PER_DAY]:
+        fade_side = "away" if ev.recommended_side == "home" else "home"
+        team = ev.game.away_team if fade_side == "away" else ev.game.home_team
+        opponent = ev.game.home_team if fade_side == "away" else ev.game.away_team
+        odds_american = ev.odds.away_ml if fade_side == "away" else ev.odds.home_ml
+        model_prob = ev.model_prob_away if fade_side == "away" else ev.model_prob_home
+        market_prob = ev.market_prob_away if fade_side == "away" else ev.market_prob_home
+
+        reasoning = [f"Model favors {opponent} instead, by a {ev.edge_pct:.1%} edge."]
+        reasoning += [fs.reasoning for fs in ev.factor_scores]
+
+        fades.append(FadeTeam(
+            game=ev.game, team=team, sport=ev.game.sport, opponent=opponent,
+            odds_american=odds_american, edge_pct=-ev.edge_pct,
+            model_prob=model_prob, market_prob=market_prob, reasoning=reasoning,
+        ))
+    return fades
 
 
 def get_parlay_pool(evaluations):

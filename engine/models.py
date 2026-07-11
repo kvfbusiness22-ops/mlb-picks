@@ -83,6 +83,22 @@ class Recommendation:
 
 
 @dataclass
+class FadeTeam:
+    """A team the system reads as bad value today -- opposite of a
+    Recommendation, this is informational (never staked): 'don't bet this
+    team's ML.' edge_pct is negative (magnitude of value against them)."""
+    game: Game
+    team: str
+    sport: str
+    opponent: str
+    odds_american: Optional[int]
+    edge_pct: float
+    model_prob: Optional[float]
+    market_prob: Optional[float]
+    reasoning: List[str]
+
+
+@dataclass
 class ParlayRecommendation:
     legs: List[Recommendation]
     combined_odds_american: int
@@ -96,6 +112,7 @@ class DailyReport:
     date: str
     slate_size: int
     plays: List[Recommendation]
+    fade_teams: List[FadeTeam]
     hr_props: List[dict]
     parlay: Optional[ParlayRecommendation]
     dropped_notes: List[str]

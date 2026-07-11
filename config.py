@@ -98,6 +98,20 @@ LINE_MOVE_REQUIRES_SHARP_CONFIRM = True   # only drop if the move is ALSO backed
 HEAVY_MONEY_HANDLE_THRESHOLD = 0.65  # handle% on one side above this = "heavy" money
 
 # ---------------------------------------------------------------------------
+# Fade list (teams to NOT bet on) -- mirror image of the play selection.
+# ---------------------------------------------------------------------------
+# For every evaluated game, the side NOT recommended has the exact opposite
+# edge (two-way market: edge_home == -edge_away). A team qualifies as a
+# "fade" (avoid its ML today) when the OTHER side's edge is at least this
+# strong -- i.e. the model reads real value against this team, not just a
+# coin-flip lean. Independent of whether that other side became an official
+# play (capped at MAX_PLAYS_PER_DAY) -- this list is comprehensive so you
+# can cross-check ANY team you're considering betting elsewhere.
+FADE_ENABLED = True
+FADE_MIN_EDGE = 0.05         # opponent's edge must be >= 5% for this team to be listed
+FADE_MAX_PER_DAY = 5
+
+# ---------------------------------------------------------------------------
 # HR Prop workflow (Section: HR Prop Workflow) -- runs automatically every day
 # ---------------------------------------------------------------------------
 HR_PROPS_ENABLED = True

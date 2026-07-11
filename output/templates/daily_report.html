@@ -167,6 +167,22 @@
     {% endfor %}
   {% endif %}
 
+  {% if fade_teams %}
+  <div class="section-title">Avoid Today</div>
+  <div class="dropped" style="margin-bottom:20px;">
+    <div style="color:var(--fg); font-weight:600; margin-bottom:8px;">Do NOT bet these teams' ML -- the system reads real value against them:</div>
+    {% for f in fade_teams %}
+    <div style="{{ 'margin-bottom:14px; padding-bottom:14px; border-bottom:1px solid var(--card-border);' if not loop.last else 'margin-bottom:2px;' }}">
+      <div style="color:var(--fg); font-size:15px; font-weight:700;">
+        {{ f.team }} <span class="sport-tag">{{ f.sport }}</span>
+        {% if f.odds_american is not none %}<span style="color:var(--muted); font-weight:400; font-family:'SF Mono','Roboto Mono',monospace; font-size:13px;">({{ '%+d' | format(f.odds_american) }})</span>{% endif %}
+      </div>
+      <div style="font-size:13px; margin-top:2px;">{{ f.reasoning[0] }}</div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
   {% if parlay %}
   <div class="section-title">Optional Parlay</div>
   <div class="parlay">
