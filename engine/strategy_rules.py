@@ -31,6 +31,8 @@ def select_daily_plays(evaluations, db, public_splits, run_date_str):
     candidates.sort(key=_edge_rank_key)
 
     recent_picks = {p["team"] for p in db.get_recent_team_picks(run_date_str, config.DIVERSIFICATION_LOOKBACK_DAYS)}
+    picked_today = {}  # team -> "away @ home" string, so a same-day doubleheader
+                        # duplicate reads as its own clear case, not a diversification failure
 
     plays = []
     dropped_notes = []
@@ -39,13 +41,30 @@ def select_daily_plays(evaluations, db, public_splits, run_date_str):
             break
 
         team = ev.game.home_team if ev.recommended_side == "home" else ev.game.away_team
+        matchup = f"{ev.game.away_team} @ {ev.game.home_team}"
+
+        if team in picked_today:
+            # Same team, different game today (doubleheader) -- NOT the same
+            # thing as the cross-day diversification rule below, so it gets
+            # its own plain-English note instead of the "didn't clear the
+            # stricter re-confirmation bar" wording (that phrasing is about
+            # prior days and reads as a contradiction when the team is ALSO
+            # sitting in the plays list above from its other game today).
+            dropped_notes.append(
+                f"{team} ({matchup}): already has today's play locked in from the {picked_today[team]} game -- "
+                f"not doubling up on the same team twice in one day."
+            )
+            continue
 
         diversification_flag = None
         if team in recent_picks:
             strong_factors = sum(1 for fs in ev.factor_scores if abs(fs.signal) >= 0.5)
             required_edge = config.MIN_EDGE + config.DIVERSIFICATION_EXTRA_EDGE
             if ev.edge_pct < required_edge or strong_factors < config.DIVERSIFICATION_MIN_STRONG_FACTORS:
-                dropped_notes.append(f"{team}: skipped -- played recently and didn't clear the stricter re-confirmation bar.")
+                dropped_notes.append(
+                    f"{team} ({matchup}): skipped -- played in the last {config.DIVERSIFICATION_LOOKBACK_DAYS} "
+                    f"day(s) and didn't clear the stricter re-confirmation bar."
+                )
                 continue
             diversification_flag = (f"{team} played within the last {config.DIVERSIFICATION_LOOKBACK_DAYS} days -- "
                                      f"needed {required_edge:.1%}+ edge and {config.DIVERSIFICATION_MIN_STRONG_FACTORS}+ "
@@ -54,7 +73,7 @@ def select_daily_plays(evaluations, db, public_splits, run_date_str):
         split = public_splits.get(ev.game.game_id) if public_splits else None
         line_flag, dropped = _check_line_movement(ev, db, split)
         if dropped:
-            dropped_notes.append(f"{team}: {line_flag}")
+            dropped_notes.append(f"{team} ({matchup}): {line_flag}")
             continue
 
         odds_american = ev.odds.home_ml if ev.recommended_side == "home" else ev.odds.away_ml
@@ -70,7 +89,7 @@ def select_daily_plays(evaluations, db, public_splits, run_date_str):
             diversification_flag=diversification_flag,
             line_movement_flag=line_flag,
         ))
-        recent_picks.add(team)  # don't recommend the same team twice in one slate either
+        picked_today[team] = matchup
 
     return plays, dropped_notes
 
@@ -129,8 +148,12 @@ def get_parlay_pool(evaluations):
     candidates = [e for e in evaluations if e.recommended_side and e.edge_pct >= config.MIN_EDGE]
     candidates.sort(key=lambda e: e.edge_pct, reverse=True)
     pool = []
+    seen_teams = set()  # a doubleheader shouldn't let one team fill 2 parlay legs
     for ev in candidates:
         team = ev.game.home_team if ev.recommended_side == "home" else ev.game.away_team
+        if team in seen_teams:
+            continue
+        seen_teams.add(team)
         odds_american = ev.odds.home_ml if ev.recommended_side == "home" else ev.odds.away_ml
         model_prob = ev.model_prob_home if ev.recommended_side == "home" else ev.model_prob_away
         market_prob = ev.market_prob_home if ev.recommended_side == "home" else ev.market_prob_away

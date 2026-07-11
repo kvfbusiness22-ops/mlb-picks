@@ -12,11 +12,20 @@ build choice):
                                    if you wire one into public_prop_splits)
   5. Final Selection           -- only the strongest signals survive
 
-Composite score is 0-100; only scores >= config.HR_PROP_MIN_SCORE make the
-report, capped at config.HR_PROP_MAX_PER_DAY (best 4-5/day) for the whole
-slate. "Only the strongest signals" is enforced by that floor -- on a thin
-slate or a day with nothing good, this can still return fewer than the cap,
-including [].
+Composite score is 0-100. Ranking + the config.HR_PROP_MAX_PER_DAY cap (best
+4-5/day) is what decides quality now, not a hard score floor -- mirrors the
+same change made to the moneyline side (MIN_EDGE). As long as there's at
+least one MLB game today with a confirmed starter and usable batter data,
+this returns real picks; it only comes back empty on a day with truly no
+computable data (no MLB games at all, no confirmed starting pitchers yet,
+or every batter's Statcast profile unavailable). Anything scoring below
+config.HR_PROP_STRONG_SCORE is still shown but flagged in its reasoning as a
+thinner-signal day, so the report stays honest about conviction without
+ever forcing you to go do your own research on a slow day.
+
+Note: HR props are inherently MLB-only (a home run is a baseball stat), so
+on any day with zero MLB games (all-WNBA slate, MLB off day) this returns
+[] regardless -- that's the bet type, not a gap in the system.
 """
 
 import config
@@ -54,6 +63,12 @@ def evaluate_hr_prop_candidates(games, rosters, stats_provider, public_prop_spli
                     if score < 90:
                         continue  # step 4: fade an overwhelmingly public prop unless it's otherwise elite
                     reasoning.append(f"Public is {public_lean:.0f}% on the OVER -- kept only because every other signal is elite.")
+
+                if score < config.HR_PROP_STRONG_SCORE:
+                    reasoning.append(
+                        f"Below our normal high-confidence bar ({config.HR_PROP_STRONG_SCORE}+) -- "
+                        f"thinner signal day, shown as the best available rather than a slam-dunk."
+                    )
 
                 candidates.append({
                     "player_name": batter_name,

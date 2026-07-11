@@ -115,9 +115,12 @@ FADE_MAX_PER_DAY = 5
 # HR Prop workflow (Section: HR Prop Workflow) -- runs automatically every day
 # ---------------------------------------------------------------------------
 HR_PROPS_ENABLED = True
-HR_PROP_MIN_SCORE = 70              # 0-100 composite score floor; "only strongest signals"
+HR_PROP_MIN_SCORE = 0               # effectively no floor -- mirrors MIN_EDGE for ML: rank + cap
+                                     # decide quality, not a hard bar, so a real slate of MLB games
+                                     # almost never returns zero props (was 70)
 HR_PROP_MAX_PER_DAY = 5             # show up to the best 4-5 each day, not just one
 HR_PROP_ROSTER_LIMIT = 9            # cap batters evaluated per team (perf -- see data/rosters.py)
+HR_PROP_STRONG_SCORE = 70           # candidates below this still get shown, but flagged as a thinner-signal day
 
 # ---------------------------------------------------------------------------
 # Optional parlay (Section: Output Layer)
