@@ -46,7 +46,8 @@ def print_daily_report(report):
 
 
 def _print_play(play, index):
-    title = f"PLAY #{index}: {play.team} ({play.sport}) ML ({play.odds_american:+d})"
+    source_tag = "" if play.odds_source == "fanduel" else "  [SIMULATED ODDS -- real line unavailable]"
+    title = f"PLAY #{index}: {play.team} ({play.sport}) ML ({play.odds_american:+d}){source_tag}"
     body = Table.grid(padding=(0, 1))
     body.add_column(justify="left")
     body.add_row(f"[bold]Edge:[/bold] {play.edge_pct:.1%}   "

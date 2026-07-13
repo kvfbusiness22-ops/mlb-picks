@@ -71,6 +71,7 @@ class Recommendation:
     team: str
     sport: str
     odds_american: int
+    odds_source: str = "mock"   # MoneylineOdds.book -- "fanduel" (real) | "mock" (simulated fallback)
     edge_pct: float
     model_prob: float
     market_prob: float
@@ -92,6 +93,7 @@ class FadeTeam:
     sport: str
     opponent: str
     odds_american: Optional[int]
+    odds_source: str
     edge_pct: float
     model_prob: Optional[float]
     market_prob: Optional[float]

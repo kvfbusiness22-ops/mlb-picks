@@ -79,7 +79,7 @@ def select_daily_plays(evaluations, db, public_splits, run_date_str):
         odds_american = ev.odds.home_ml if ev.recommended_side == "home" else ev.odds.away_ml
         plays.append(Recommendation(
             game=ev.game, side=ev.recommended_side, team=team, sport=ev.game.sport,
-            odds_american=odds_american, edge_pct=ev.edge_pct,
+            odds_american=odds_american, odds_source=ev.odds.book, edge_pct=ev.edge_pct,
             model_prob=ev.model_prob_home if ev.recommended_side == "home" else ev.model_prob_away,
             market_prob=ev.market_prob_home if ev.recommended_side == "home" else ev.market_prob_away,
             stake_units=config.FLAT_STAKE_UNITS,
@@ -132,7 +132,7 @@ def select_fade_teams(evaluations):
 
         fades.append(FadeTeam(
             game=ev.game, team=team, sport=ev.game.sport, opponent=opponent,
-            odds_american=odds_american, edge_pct=-ev.edge_pct,
+            odds_american=odds_american, odds_source=ev.odds.book, edge_pct=-ev.edge_pct,
             model_prob=model_prob, market_prob=market_prob, reasoning=reasoning,
         ))
     return fades
@@ -159,7 +159,7 @@ def get_parlay_pool(evaluations):
         market_prob = ev.market_prob_home if ev.recommended_side == "home" else ev.market_prob_away
         pool.append(Recommendation(
             game=ev.game, side=ev.recommended_side, team=team, sport=ev.game.sport, odds_american=odds_american,
-            edge_pct=ev.edge_pct, model_prob=model_prob, market_prob=market_prob,
+            odds_source=ev.odds.book, edge_pct=ev.edge_pct, model_prob=model_prob, market_prob=market_prob,
             stake_units=config.FLAT_STAKE_UNITS, stake_dollars=config.FLAT_STAKE_UNITS * config.UNIT_SIZE_DOLLARS,
             reasoning=[fs.reasoning for fs in ev.factor_scores], factor_scores=ev.factor_scores,
         ))

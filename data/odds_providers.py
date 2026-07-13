@@ -21,7 +21,19 @@ import requests
 
 import config
 from engine.models import MoneylineOdds
-from data.teams import normalize_team
+from data.teams import normalize_team as normalize_mlb_team
+from data.teams_wnba import normalize_wnba_team
+
+
+def _normalize_for_sport(raw, sport):
+    """Odds feeds spell team names differently per sport, and the two sports'
+    abbreviation tables aren't interchangeable (e.g. Washington Nationals is
+    WSH, Washington Mystics is WAS) -- dispatch to the right one instead of
+    always using the MLB table, or non-MLB games silently fail to match their
+    real odds event and fall back to simulated numbers for that game."""
+    if sport == "WNBA":
+        return normalize_wnba_team(raw)
+    return normalize_mlb_team(raw)
 
 logger = logging.getLogger(__name__)
 
@@ -109,8 +121,8 @@ class TheOddsApiProvider(OddsProvider):
 
         by_teams = {}
         for event in payload:
-            home = normalize_team(event.get("home_team", ""))
-            away = normalize_team(event.get("away_team", ""))
+            home = _normalize_for_sport(event.get("home_team", ""), self.sport)
+            away = _normalize_for_sport(event.get("away_team", ""), self.sport)
             by_teams[(home, away)] = event
 
         out = {}
@@ -118,15 +130,16 @@ class TheOddsApiProvider(OddsProvider):
         for game in games:
             event = by_teams.get((game.home_team, game.away_team))
             if not event:
-                logger.warning("No odds found for %s @ %s -- using mock for this game only.",
-                               game.away_team, game.home_team)
+                logger.warning("No live %s odds found for %s @ %s (checked %d events from the API) -- "
+                               "using simulated odds for this game only.",
+                               self.sport, game.away_team, game.home_team, len(payload))
                 out[game.game_id] = MockOddsProvider().get_odds([game])[game.game_id]
                 continue
-            out[game.game_id] = _parse_odds_event(event, self.bookmaker, game, now)
+            out[game.game_id] = _parse_odds_event(event, self.bookmaker, game, now, self.sport)
         return out
 
 
-def _parse_odds_event(event, bookmaker, game, captured_at):
+def _parse_odds_event(event, bookmaker, game, captured_at, sport):
     home_ml = away_ml = None
     home_spread = away_spread = None
     total = None
@@ -136,15 +149,15 @@ def _parse_odds_event(event, bookmaker, game, captured_at):
         for market in bm.get("markets", []):
             if market["key"] == "h2h":
                 for outcome in market["outcomes"]:
-                    if normalize_team(outcome["name"]) == game.home_team:
+                    if _normalize_for_sport(outcome["name"], sport) == game.home_team:
                         home_ml = outcome["price"]
-                    elif normalize_team(outcome["name"]) == game.away_team:
+                    elif _normalize_for_sport(outcome["name"], sport) == game.away_team:
                         away_ml = outcome["price"]
             elif market["key"] == "spreads":
                 for outcome in market["outcomes"]:
-                    if normalize_team(outcome["name"]) == game.home_team:
+                    if _normalize_for_sport(outcome["name"], sport) == game.home_team:
                         home_spread = outcome["point"]
-                    elif normalize_team(outcome["name"]) == game.away_team:
+                    elif _normalize_for_sport(outcome["name"], sport) == game.away_team:
                         away_spread = outcome["point"]
             elif market["key"] == "totals":
                 if market["outcomes"]:
