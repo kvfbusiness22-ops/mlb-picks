@@ -65,17 +65,18 @@ def score_talent_gap(ctx):
 
 def score_matchup_pitching(ctx):
     hp, ap = ctx.home_pitcher_profile, ctx.away_pitcher_profile
-    if not hp or not ap or hp.fip is None or ap.fip is None:
+    if not hp or not ap or hp.era is None or ap.era is None:
         return FactorScore("matchup_pitching", "Matchup advantage (pitching)", 0.0,
                             config.FACTOR_WEIGHTS["matchup_pitching"],
-                            "Probable starters' FIP unavailable -- neutral until confirmed.",
+                            "Probable starters' ERA unavailable -- neutral until confirmed.",
                             "degraded")
-    fip_gap = ap.fip - hp.fip  # positive => home starter better (lower FIP)
-    signal = _clip(fip_gap / 2.0)  # a full run of FIP gap = full-strength signal
-    better = "home" if fip_gap > 0 else "away"
+    era_gap = ap.era - hp.era  # positive => home starter better (lower ERA)
+    signal = _clip(era_gap / 2.0)  # a full run of ERA gap = full-strength signal
+    better = "home" if era_gap > 0 else "away"
     home_name = ctx.game.home_pitcher.name if ctx.game.home_pitcher else "TBD"
     away_name = ctx.game.away_pitcher.name if ctx.game.away_pitcher else "TBD"
-    reasoning = f"Starter FIP: {home_name} {hp.fip:.2f} vs {away_name} {ap.fip:.2f} -> edge to {better} starter"
+    fip_note = f" (FIP: {hp.fip:.2f} vs {ap.fip:.2f})" if hp.fip is not None and ap.fip is not None else ""
+    reasoning = f"Starter ERA: {home_name} {hp.era:.2f} vs {away_name} {ap.era:.2f}{fip_note} -> edge to {better} starter"
     return FactorScore("matchup_pitching", "Matchup advantage (pitching)", signal,
                         config.FACTOR_WEIGHTS["matchup_pitching"], reasoning, "ok")
 
