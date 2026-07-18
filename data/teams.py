@@ -11,7 +11,7 @@ built -- that's intentional, not a typo.
 """
 
 TEAMS = {
-    "ARI": {"name": "Arizona Diamondbacks", "aliases": ["diamondbacks", "arizona", "d-backs"]},
+    "ARI": {"name": "Arizona Diamondbacks", "aliases": ["diamondbacks", "arizona", "d-backs", "az"]},
     "ATL": {"name": "Atlanta Braves", "aliases": ["braves", "atlanta"]},
     "BAL": {"name": "Baltimore Orioles", "aliases": ["orioles", "baltimore"]},
     "BOS": {"name": "Boston Red Sox", "aliases": ["red sox", "boston"]},

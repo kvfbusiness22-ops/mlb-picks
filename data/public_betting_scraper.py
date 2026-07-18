@@ -65,7 +65,7 @@ def _team_mention_offsets(text_lower, team_abbr):
     info = TEAMS.get(team_abbr)
     if not info:
         return []
-    names = sorted([info["name"]] + info["aliases"], key=len, reverse=True)
+    names = sorted([info["name"], team_abbr] + info["aliases"], key=len, reverse=True)
     offsets = []
     for name in names:
         for m in re.finditer(re.escape(name.lower()), text_lower):
