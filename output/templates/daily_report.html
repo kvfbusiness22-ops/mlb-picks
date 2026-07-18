@@ -215,9 +215,9 @@
   </div>
   {% endif %}
 
-  {% if bankroll %}
+   {% if bankroll %}
   <div class="bankroll">
-    <div class="col"><div class="num">{{ bankroll.wins|default(0) }}-{{ bankroll.losses|default(0) }}</div><div class="lbl">Record</div></div>
+    <div class="col"><div class="num">{{ bankroll.wins|default(0) }}-{{ bankroll.losses|default(0) }}</div><div class="lbl">Record</div><div style="font-size:11px; color:var(--muted); margin-top:4px;">Since Jul 18, 2026</div></div>
   </div>
   {% endif %}
 
