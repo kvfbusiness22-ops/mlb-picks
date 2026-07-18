@@ -120,6 +120,8 @@ class PyBaseballStatsProvider(StatsProvider):
         self.cache = _StatsCache()
         self._pitching_table = None
         self._batting_table = None
+        self._pitcher_barrel_table = None   # season-long Statcast LEADERBOARD (one fast call), not per-player pulls
+        self._batter_barrel_table = None
 
     # -- pitchers -------------------------------------------------------
     def get_pitcher_profile(self, pitcher_name):
@@ -175,29 +177,29 @@ class PyBaseballStatsProvider(StatsProvider):
         return matches.iloc[0].to_dict()
 
     def _statcast_barrel_hard_hit_allowed(self, pitcher_name):
-        """Best-effort Statcast barrel%/hard-hit% allowed over the current
-        season, computed from pitch-level data. Returns (None, None) on any
-        failure -- callers treat that as 'unavailable', not fatal."""
+        """Barrel%/hard-hit% allowed, from Baseball Savant's precomputed
+        season leaderboard (one bulk call, cached) instead of pulling every
+        pitch the pitcher threw all season (statcast_pitcher) -- that raw
+        per-player pull is what was silently timing out/erroring for most
+        pitchers. Returns (None, None) on any failure -- callers treat that
+        as 'unavailable', not fatal."""
         try:
             import pybaseball as pyb
 
-            first, last = _split_name(pitcher_name)
-            ids = pyb.playerid_lookup(last, first)
-            if ids.empty:
+            if self._pitcher_barrel_table is None:
+                self._pitcher_barrel_table = pyb.statcast_pitcher_exitvelo_barrels(_season(), minBBE=0)
+            table = self._pitcher_barrel_table
+            if table is None or table.empty:
                 return None, None
-            player_id = int(ids.iloc[0]["key_mlbam"])
-            season = _season()
-            df = pyb.statcast_pitcher(f"{season}-03-01", f"{season}-11-30", player_id)
-            if df is None or df.empty or "launch_speed" not in df.columns:
+
+            row = _match_savant_name(table, pitcher_name)
+            if row is None:
                 return None, None
-            batted = df.dropna(subset=["launch_speed"])
-            if batted.empty:
-                return None, None
-            hard_hit_pct = round(100 * (batted["launch_speed"] >= 95).mean(), 1)
-            barrel_pct = round(100 * (batted["barrel"] == 1).mean(), 1) if "barrel" in batted.columns else None
-            return barrel_pct, hard_hit_pct
+            barrel = _safe_float(row.get("brl_percent"))
+            hard_hit = _safe_float(row.get("ev95percent"))
+            return barrel, hard_hit
         except Exception as exc:
-            logger.debug("statcast pull failed for %s: %s", pitcher_name, exc)
+            logger.debug("statcast pitcher leaderboard lookup failed for %s: %s", pitcher_name, exc)
             return None, None
 
     # -- team offense -----------------------------------------------------
@@ -235,50 +237,50 @@ class PyBaseballStatsProvider(StatsProvider):
         try:
             import pybaseball as pyb
 
-            first, last = _split_name(batter_name)
-            ids = pyb.playerid_lookup(last, first)
-            if ids.empty:
-                profile = BatterProfile(name=batter_name, team=team_abbr, data_quality="not_found")
+            if self._batter_barrel_table is None:
+                self._batter_barrel_table = pyb.statcast_batter_exitvelo_barrels(_season(), minBBE=0)
+            table = self._batter_barrel_table
+            if table is None or table.empty:
+                profile = BatterProfile(name=batter_name, team=team_abbr, data_quality="degraded")
             else:
-                player_id = int(ids.iloc[0]["key_mlbam"])
-                season = _season()
-                df = pyb.statcast_batter(f"{season}-03-01", f"{season}-11-30", player_id)
-                profile = self._batter_profile_from_statcast(df, batter_name, team_abbr)
+                row = _match_savant_name(table, batter_name)
+                if row is None:
+                    profile = BatterProfile(name=batter_name, team=team_abbr, data_quality="not_found")
+                else:
+                    barrel = _safe_float(row.get("brl_percent"))
+                    hard_hit = _safe_float(row.get("ev95percent"))
+                    profile = BatterProfile(
+                        name=batter_name, team=team_abbr, barrel_pct=barrel, hard_hit_pct=hard_hit,
+                        data_quality="ok" if barrel is not None else "partial",
+                    )
         except Exception as exc:
             logger.warning("batter profile lookup failed for %s: %s", batter_name, exc)
             profile = BatterProfile(name=batter_name, team=team_abbr, data_quality="degraded")
         self.cache.set(cache_key, asdict(profile))
         return profile
 
-    def _batter_profile_from_statcast(self, df, batter_name, team_abbr):
-        if df is None or df.empty or "launch_speed" not in df.columns:
-            return BatterProfile(name=batter_name, team=team_abbr, data_quality="partial")
-
-        batted = df.dropna(subset=["launch_speed"]).copy()
-        if batted.empty:
-            return BatterProfile(name=batter_name, team=team_abbr, data_quality="partial")
-
-        hard_hit = round(100 * (batted["launch_speed"] >= 95).mean(), 1)
-        has_barrel_col = "barrel" in batted.columns
-        barrel = round(100 * (batted["barrel"] == 1).mean(), 1) if has_barrel_col else None
-
-        recent_trend = None
-        if has_barrel_col and "game_date" in batted.columns and barrel is not None:
-            batted["game_date"] = pd.to_datetime(batted["game_date"])
-            cutoff = batted["game_date"].max() - pd.Timedelta(days=15)
-            recent = batted[batted["game_date"] >= cutoff]
-            if not recent.empty:
-                recent_trend = round(100 * (recent["barrel"] == 1).mean() - barrel, 1)
-
-        return BatterProfile(
-            name=batter_name, team=team_abbr, barrel_pct=barrel, hard_hit_pct=hard_hit,
-            recent_barrel_trend=recent_trend, data_quality="ok" if barrel is not None else "partial",
-        )
-
 
 def _season():
     from datetime import datetime
     return datetime.now().year
+
+
+def _match_savant_name(table, full_name):
+    """Baseball Savant leaderboard tables key players by 'Last, First' in a
+    'last_name, first_name' column -- convert our 'First Last' and match,
+    falling back to a last-name-only contains match for suffixes/accents."""
+    if "last_name, first_name" not in table.columns:
+        return None
+    first, last = _split_name(full_name)
+    target = f"{last}, {first}".strip().lower()
+    col = table["last_name, first_name"].astype(str).str.lower()
+    exact = table[col == target]
+    if not exact.empty:
+        return exact.iloc[0].to_dict()
+    contains = table[col.str.contains(last.lower(), na=False)]
+    if not contains.empty:
+        return contains.iloc[0].to_dict()
+    return None
 
 
 def _safe_float(v):
