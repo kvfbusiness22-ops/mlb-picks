@@ -167,9 +167,9 @@ def main(argv=None):
         if not odds:
             continue
         is_mlb = game.sport == "MLB"
-        home_pitcher_profile = (stats_provider.get_pitcher_profile(game.home_pitcher.name)
+        home_pitcher_profile = (stats_provider.get_pitcher_profile(game.home_pitcher.name, game.home_pitcher.player_id)
                                  if is_mlb and game.home_pitcher else None)
-        away_pitcher_profile = (stats_provider.get_pitcher_profile(game.away_pitcher.name)
+        away_pitcher_profile = (stats_provider.get_pitcher_profile(game.away_pitcher.name, game.away_pitcher.player_id)
                                  if is_mlb and game.away_pitcher else None)
         home_offense = stats_provider.get_team_offense_profile(game.home_team) if is_mlb else None
         away_offense = stats_provider.get_team_offense_profile(game.away_team) if is_mlb else None
