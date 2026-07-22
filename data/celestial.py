@@ -37,15 +37,16 @@ REFERENCE_NEW_MOON = datetime(2000, 1, 6, 18, 14, tzinfo=timezone.utc)
 # 180 = Full, 270 = Last Quarter). The four PRINCIPAL phases only get a
 # narrow +/-12deg (~1 day) window; everything else is a crescent/gibbous.
 MOON_PHASE_ANGLE_BANDS = [
-    (12.0,  "New Moon"),
-    (78.0,  "Waxing Crescent"),
-    (102.0, "First Quarter"),
-    (168.0, "Waxing Gibbous"),
-    (192.0, "Full Moon"),
-    (258.0, "Waning Gibbous"),
-    (282.0, "Last Quarter"),
-    (348.0, "Waning Crescent"),
+    (6.0,   "New Moon"),
+    (84.0,  "Waxing Crescent"),
+    (96.0,  "First Quarter"),
+    (174.0, "Waxing Gibbous"),
+    (186.0, "Full Moon"),
+    (264.0, "Waning Gibbous"),
+    (276.0, "Last Quarter"),
+    (354.0, "Waning Crescent"),
     (360.0, "New Moon"),
+
 ]
 
 # EDIT ME: your real read on how each phase should lean.
