@@ -119,16 +119,22 @@ class TheOddsApiProvider(OddsProvider):
             logger.error("The Odds API request failed (%s) -- falling back to mock odds.", exc)
             return MockOddsProvider().get_odds(games)
 
+        # A team can appear MORE THAN ONCE in the feed (today's game AND
+        # tomorrow's, or a doubleheader), so we keep a LIST of events per
+        # matchup and pick the one whose start time is closest to this
+        # game's scheduled first pitch -- otherwise a same-matchup next-day
+        # game silently overwrites today's line (the "ARI +116 is tomorrow's
+        # number" bug).
         by_teams = {}
         for event in payload:
             home = _normalize_for_sport(event.get("home_team", ""), self.sport)
             away = _normalize_for_sport(event.get("away_team", ""), self.sport)
-            by_teams[(home, away)] = event
+            by_teams.setdefault((home, away), []).append(event)
 
         out = {}
         now = datetime.now(timezone.utc).isoformat()
         for game in games:
-            event = by_teams.get((game.home_team, game.away_team))
+            event = _closest_event(by_teams.get((game.home_team, game.away_team), []), game)
             if not event:
                 logger.warning("No live %s odds found for %s @ %s (checked %d events from the API) -- "
                                "using simulated odds for this game only.",
@@ -137,6 +143,37 @@ class TheOddsApiProvider(OddsProvider):
                 continue
             out[game.game_id] = _parse_odds_event(event, self.bookmaker, game, now, self.sport)
         return out
+
+
+def _closest_event(events, game):
+    """From all feed events for this matchup, pick the one whose commence_time
+    is nearest the game's scheduled start -- so today's game never grabs
+    tomorrow's line. With one event it's returned directly; with none, None."""
+    if not events:
+        return None
+    if len(events) == 1 or not game.game_time_utc:
+        return events[0]
+    try:
+        target = _parse_iso(game.game_time_utc)
+    except Exception:
+        return events[0]
+
+    def _distance(ev):
+        ct = ev.get("commence_time")
+        if not ct:
+            return float("inf")
+        try:
+            return abs((_parse_iso(ct) - target).total_seconds())
+        except Exception:
+            return float("inf")
+
+    return min(events, key=_distance)
+
+
+def _parse_iso(s):
+    if s.endswith("Z"):
+        s = s[:-1] + "+00:00"
+    return datetime.fromisoformat(s)
 
 
 def _parse_odds_event(event, bookmaker, game, captured_at, sport):
